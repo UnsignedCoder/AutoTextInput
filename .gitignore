@@ -1,0 +1,22 @@
+# CMake build files
+cmake-build-debug/
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+cmake_install.cmake
+
+# Executables and libraries
+*.exe
+*.dll
+*.so
+*.a
+*.lib
+*.obj
+
+# IDE-specific files (JetBrains CLion)
+.idea/
+
+# Other
+*.swp
+*~
+
