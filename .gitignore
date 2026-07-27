@@ -1,5 +1,6 @@
 # CMake build files
 cmake-build-debug/
+cmake-build-release/
 CMakeCache.txt
 CMakeFiles/
 compile_commands.json

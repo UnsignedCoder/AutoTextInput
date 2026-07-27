@@ -1,4 +1,4 @@
-﻿// TODO: fix program not exiting after last paragrapgh is sent
+// TODO: fix program not exiting after last paragraph is sent
 // TODO: refactor the code to use it's own typing thread so that the main tread can handle the UI and a keyboard listening thread listening for the shortcut that'll terminate the typing thread mid typing
 // TODO: and a capture clipboard shortcut so i can use a global shortcut to immediately capture and execute auto typing hence letting me delete the alt tab to switch to the next tab
 // TODO: make the UI
@@ -10,17 +10,21 @@
 #include <string>
 #include <thread>
 #include <Windows.h>
+#include <QApplication>
+#include <QWidget>
 
 /**
  * @brief Simulates typing of a given string of characters.
  * @param inputWords The wide string to be typed out.
  * @param typeSpeed The desired typing speed in words per minute (WPM).
+ * @pre typeSpeed must be greater than 0 - it is used as a divisor below, so 0 will trigger a division-by-zero.
  * @note This function calculates the delay between keystrokes based on a standard of 5 characters per word.
  * @warning This function relies on the Windows-specific `SendInput` function and is not portable to other operating systems.
  */
 void TypeInput( const std::wstring& inputWords, const unsigned int typeSpeed) {
     INPUT input[2] = {};
     ZeroMemory(input, sizeof(input));
+
     // Calculate typing speed by converting words per minute to a delay in milliseconds per character.
     // Assumes an average word length of 5 characters.
     const unsigned int typingSpeed = static_cast<unsigned int>(60'000/(typeSpeed * 5));
@@ -45,6 +49,8 @@ void TypeInput( const std::wstring& inputWords, const unsigned int typeSpeed) {
             input[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP; // Use Unicode character for key up
         }
 
+        // cbSize (final arg) is the size of a single INPUT struct, not the size of the whole array -
+        // this is correct as-is per the SendInput API contract, not a bug.
         const unsigned int sent = SendInput(std::size(input), input, sizeof(INPUT));
         if (sent != std::size(input)) {
             printf("SendInput failed: 0x%x\n", HRESULT_FROM_WIN32(GetLastError()));
@@ -95,18 +101,17 @@ void SwitchToNextActiveWindow()
 }
 
 /**
- * @brief Main entry point for the auto-typing application.
- * @return Returns 0 on successful completion.
- * @details This program reads lines of text from standard input and simulates typing them into another window.
- * It is designed to automate the process of transferring text from one source to another by simulating keyboard input.
- * @note The program currently requires the user to paste text into the console window. It will then switch to the most recent window to type out the pasted content.
- * @warning This application is dependent on the Windows API for input simulation and will not compile or run on other operating systems.
+ * @brief Reads lines of text from the console and types each one into the previously active window.
+ * @param CurrentInputLine Working buffer for the line currently being read; cleared and reused each iteration.
+ * @param activeWindow Whether focus has already been switched to the target window this session.
+ * @param typingSpeed Typing speed in words per minute, forwarded to TypeInput.
+ * @note This is the original console-driven workflow. main() currently launches the Qt UI skeleton
+ *       instead of calling this function, so it is presently unused - kept here pending the planned
+ *       typing-thread refactor described in the TODOs above.
+ * @see TypeInput
+ * @see SwitchToNextActiveWindow
  */
-int main () {
-    std::wstring CurrentInputLine;
-    bool activeWindow = false;
-    const unsigned int typingSpeed = 250; // Default typing speed in WPM
-
+void ExecuteTyping ( std::wstring CurrentInputLine, bool activeWindow, const unsigned int typingSpeed ) {
     std::cout << "Paste words to type here: " << "\n";
 
     // Loop to read lines from the console until an empty line is entered.
@@ -118,13 +123,43 @@ int main () {
             SwitchToNextActiveWindow();
             activeWindow = true;
         }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Wait for the window to switch
+        // Wait for the window switch (above) to actually complete before typing begins -
+        // without this delay, keystrokes can arrive before the target window has focus.
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         TypeInput(CurrentInputLine, typingSpeed);
         CurrentInputLine.clear();
     }
 
     std::cout << "Finished typing. Press Enter to exit." << std::endl;
-    std::cin.get();
+}
+
+/**
+ * @brief Application entry point.
+ * @return The Qt event loop's exit code, forwarded from QApplication::exec().
+ * @details Currently boots a minimal, empty Qt window as a smoke test to confirm the build
+ * toolchain (compiler, CMake, and Qt linking) is wired together correctly. The original
+ * console-based typing workflow (see ExecuteTyping, above) is temporarily disabled below
+ * while the real Qt UI is being built out.
+ * @note This doc comment previously described the console-input workflow as the active behavior;
+ *       corrected here since main() no longer calls ExecuteTyping.
+ * @warning This application depends on both the Windows API (input simulation) and Qt, and is not portable as-is.
+ */
+int main (int argc, char* argv[]) {
+    // Original console-driven entry point, temporarily disabled while the Qt UI replaces it.
+    // std::wstring CurrentInputLine;
+    // bool activeWindow = false;
+    // const unsigned int typingSpeed = 250; // Default typing speed in WPM
+    //
+    // ExecuteTyping(CurrentInputLine, activeWindow, typingSpeed);
+
+    // Toolchain smoke test: an empty window with no content yet - proves QApplication,
+    // CMake's Qt linkage, and the deployed runtime DLLs all work end-to-end before any
+    // real UI (tray icon, settings, typing speed control) is built on top of it.
+    QApplication App (argc, argv);
+    QWidget Window;
+    Window.resize(400, 300);
+    Window.setWindowTitle("AutoTextInput");
+    Window.show();
+    return App.exec();
 }
