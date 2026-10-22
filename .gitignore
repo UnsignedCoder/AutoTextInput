@@ -21,3 +21,9 @@ cmake_install.cmake
 *.swp
 *~
 
+
+# Generic out-of-source build folders (e.g. `cmake -B build` on Linux)
+build/
+
+# Personal learning guide - kept local, not part of the repository
+DEVELOPER_GUIDE.md
